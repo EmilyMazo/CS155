@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-#import nltk
+import nltk.tag
 import numpy as np
 import random
 import math
@@ -11,8 +11,11 @@ import math
 # There is currently no other preprocessing.
 
 def tokenizeSequences(filename):
+    training = []
+    training_temp = []
     sonnets = open(filename, "r")
-    sonnet_list = {}
+    sonnet_list = []
+    sonnet_list_temp = []
     observations = {}
     counter = 0
     for line in sonnets:
@@ -22,7 +25,10 @@ def tokenizeSequences(filename):
             if line == ['']:
                 continue
             counter += 1
-            sonnet_list[counter] = []
+            sonnet_list.append(sonnet_list_temp)
+            training.append(training_temp)
+            training_temp = []
+            sonnet_list_temp = []
             continue
         #line.append("</s>")
         new_line = []
@@ -30,9 +36,13 @@ def tokenizeSequences(filename):
         for l in line:
             if l not in observations:
                 observations[l] = 1
-            sonnet_list[counter].append(l)
+            sonnet_list_temp.append(l)
+            training_temp.append((l, ''))
+    training.append(training_temp)
+    training.remove([])
+    sonnet_list.remove([])
     sonnets.close()
-    return sonnet_list, len(observations), observations.keys()
+    return training, sonnet_list, observations.keys(), len(observations.keys())
  
 
 class EM(object):
@@ -52,6 +62,7 @@ class EM(object):
         # This will be a dictonary of vectors. 
         # alpha_i(t) will be alpha_list[i][t].
         alpha_list = {}
+        alpha_sum = {}
         for i in range(self.N):
             alpha_list[i] = np.zeros((self.T, 1))
             Bindex = self.obs.index(self.y[0])
@@ -59,15 +70,15 @@ class EM(object):
         for j in range(self.N):
             for t in range(self.T - 1):
                 alpha_col_sum = 0.0 # This will be the sum of all a_i(t) for this t
-                alpha_sum = 0.0
+                alpha_sum[j] = 0.0
                 for i in range(self.N):
                     alpha_col_sum += alpha_list[i][t]
-                    alpha_sum += alpha_list[i][t] * A[i][j]
+                    alpha_sum[j] += alpha_list[i][t] * A[i][j]
                 Bindex = self.obs.index(self.y[t + 1])
                 if alpha_col_sum == 0:
                     alpha_list[j][t + 1] = 0
                 else:
-                    alpha_list[j][t + 1] = B[j][Bindex] * alpha_sum / (alpha_col_sum )
+                    alpha_list[j][t + 1] = B[j][Bindex] * alpha_sum[j] / (alpha_col_sum )
         return alpha_list
 
     def backward(self, A, B, pi):
@@ -78,21 +89,22 @@ class EM(object):
         # This will be a dictionary of vectors.
         # beta_i(t) will be beta_list[i][t].
         beta_list = {}
+        beta_sum = {}
         for i in range(self.N):
             beta_list[i] = np.zeros((self.T, 1))
             beta_list[i][self.T - 1] = 1.0
         for j in range(self.N):
             for t in range(self.T - 2, -1, -1):
                 beta_col_sum = 0.0
-                beta_sum = 0.0
+                beta_sum[j] = 0.0
                 for n in range(self.N):
                     beta_col_sum += beta_list[n][t + 1]
                     Bindex = self.obs.index(self.y[t + 1])
-                    beta_sum += beta_list[n][t + 1] * A[j][n] * B[n][Bindex]
+                    beta_sum[j] += beta_list[n][t + 1] * A[j][n] * B[n][Bindex]
                 if beta_col_sum == 0 :
                     beta_list[j][t] = 0
                 else: 
-                    beta_list[j][t] = beta_sum / (beta_col_sum )
+                    beta_list[j][t] = beta_sum[j] / (beta_col_sum )
         return beta_list
 
     def get_gamma(self, alpha_list, beta_list):
@@ -124,23 +136,27 @@ class EM(object):
             This function calculates the matrix delta 
             for the maximization step of the Baum-Welch algorithm.
         '''
-        delta_sum = 0.0
         delta = np.empty([self.N, self.N, self.T])
-        for k in range(self.N):
-            delta_sum += alpha_list[k][self.T - 1]
+        delta_sum = {}
+        for t in range(self.T - 1):
+            delta_sum[t] = 0.0
+            for i in range(self.N):
+                for j in range(self.N):
+                    Bindex = self.obs.index(self.y[t + 1])
+                    delta_sum[t] += alpha_list[i][t] * B[j][Bindex] * A[i][j] * beta_list[j][t + 1]                    
+                    num = alpha_list[i][t] * A[i][j] * beta_list[j][t + 1] * B[j][Bindex]
+                    delta[i][j][t] = num 
         for i in range(self.N):
             for j in range(self.N):
                 for t in range(self.T - 1):
-                    Bindex = self.obs.index(self.y[t + 1])
-                    num = alpha_list[i][t] * A[i][j] * beta_list[j][t + 1] * B[j][Bindex]
-                    delta[i][j][t] = num / delta_sum
-        for x in range(self.T):
-            temp = 0.0
-            for m in range(self.N):
-                for n in range(self.N):
-                    temp += delta[m][n][t]
-            print "temp"
-            print temp
+                    delta[i][j][t] = delta[i][j][t] / delta_sum[t] 
+        #for x in range(self.T):
+        #    temp = 0.0
+        #    for m in range(self.N):
+        #        for n in range(self.N):
+        #            temp += delta[m][n][t]
+        #    print "temp"
+        #    print temp
         return delta
 
     def update_A(self, gamma, delta):
@@ -156,6 +172,7 @@ class EM(object):
                     sumNum += delta[i][j][t]
                     sumDenom += gamma[i][t]
                 A[i][j] = sumNum / sumDenom
+        print abs(sum([A[0][x] for x in range(self.N)]))
         assert abs(sum([A[0][x] for x in range(self.N)]) - 1) < 0.001
         return A
 
@@ -196,12 +213,24 @@ class EM(object):
         A = np.zeros((self.N, self.N))
         B = np.zeros((self.N, self.K))
         pi = np.zeros((self.N, 1))
+        A_sum = np.zeros((self.N, 1))
+        B_sum = np.zeros((self.N, 1))
+        pi_sum = 0.0
         for n in range(self.N):
             for i in range(self.N):
-                A[n][i] = 1.0 / self.N
+                A[n][i] = random.uniform(0.0, 1.0)
+                A_sum[n] += A[n][i]
             for k in range(self.K):
-                B[n][k] = 1.0 / self.K 
-            pi[n] = 1.0 / self.N
+                B[n][k] = random.uniform(0.0, 1.0)
+                B_sum[n] += B[n][k] 
+            pi[n] = random.uniform(0.0, 1.0)
+            pi_sum += pi[n]
+            for j in range(self.N):
+                A[n][j] = A[n][j] / A_sum[n]
+            for e in range(self.K):
+                B[n][e] = B[n][e] / B_sum[n]
+        for m in range(self.N):
+            pi[m] = pi[m] / pi_sum
         is_converged = False
         counter = 0
         while (is_converged != True):
@@ -209,12 +238,20 @@ class EM(object):
             self.y = random.choice(Y)
             self.T = len(self.y)
             alpha_list = self.forward(A, B, pi)
+            print "done alpha"
             beta_list = self.backward(A, B, pi)
+            print "done beta"
             gamma = self.get_gamma(alpha_list, beta_list)
+            print "done gamma"
             delta = self.get_delta(A, B, alpha_list, beta_list)
+            print "done delta"
             Anew = self.update_A(gamma, delta)
+            print "a new"
+            print Anew
             Bnew = self.update_B(gamma)
+            print "b new"
             pinew = self.update_pi(gamma)
+            print "pi new"
             counter += 1
             if counter == 1:
                 Adiff = Anew - A
@@ -238,14 +275,19 @@ class EM(object):
             B = Bnew
             pi = pinew
 
+
 if __name__ == '__main__':
     em = EM()
-    Y, k, obs = tokenizeSequences("shakespeare.txt")
+    training, sonnets, obs, k = tokenizeSequences("shakespeare.txt")
     em.N = 20 # This can be set to whatever we want it to be
-    em.K = k
+    em.K = k 
     em.obs = obs
-    hmm = em.train(Y)
-
+    hmm = em.train(sonnets)
+    #states = range(5)
+    #observations = list(obs)
+    #hmm_trainer = nltk.tag.hmm.HiddenMarkovModelTrainer(states=states, symbol=observations)
+    #hmm = hmm_trainer.train_unsupervised(training)
+    #print hmm
         
 
 
