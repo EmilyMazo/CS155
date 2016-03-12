@@ -1,9 +1,11 @@
 #!/usr/bin/python
 
 import nltk.tag
+import nltk
 import numpy as np
 import random
 import math
+import sys
 
 # The following code reads each sonnet from a text file.
 # Each sonnet is input as a single element into sonnet_list.
@@ -23,7 +25,7 @@ def tokenizeSequences(filename):
         line = line.split(' ')
         if len(line) == 1:
             if line == ['']:
-                if counter == 0:
+                if counter <= 50:
                     continue
                 else:
                     break
@@ -83,6 +85,7 @@ class EM(object):
                     alpha_list[j][t + 1] = 0
                 else:
                     alpha_list[j][t + 1] = B[j][Bindex] * alpha_sum[j] / (alpha_col_sum )
+        #print alpha_list
         return alpha_list
 
     def backward(self, A, B, pi):
@@ -109,6 +112,7 @@ class EM(object):
                     beta_list[j][t] = 0
                 else: 
                     beta_list[j][t] = beta_sum[j] / (beta_col_sum )
+        #print beta_list
         return beta_list
 
     def get_gamma(self, alpha_list, beta_list):
@@ -180,6 +184,7 @@ class EM(object):
         #print delta
         print abs(sum(A[0]))
         #assert abs(sum([A[0][x] for x in range(self.N)]) - 1) < 0.001
+        print A
         return A
 
     def update_B(self, gamma):
@@ -191,11 +196,11 @@ class EM(object):
             for k in range(self.K):
                 sumNum = 0.0
                 sumDenom = 0.0
-                for t in range(self.T - 0):
+                for t in range(self.T):
                     if (self.y[t] == self.obs[k]):
                         sumNum += gamma[i][t]
                     sumDenom += gamma[i][t]
-                B[i][k] =  1e-50 + (sumNum / sumDenom)
+                B[i][k] =  (sumNum / sumDenom)
         print abs(sum(B[0]))
         return B
 
@@ -224,12 +229,12 @@ class EM(object):
         pi_sum = 0.0
         for n in range(self.N):
             for i in range(self.N):
-                A[n][i] = random.uniform(0.0, 1.0)
+                A[n][i] = np.random.gamma(1,1)
                 A_sum[n] += A[n][i]
             for k in range(self.K):
-                B[n][k] = random.uniform(0.0, 1.0)
+                B[n][k] = np.random.gamma(1,1)
                 B_sum[n] += B[n][k] 
-            pi[n] = random.uniform(0.0, 1.0)
+            pi[n] = np.random.gamma(1,1)
             pi_sum += pi[n]
             for j in range(self.N):
                 A[n][j] = A[n][j] / A_sum[n]
@@ -237,6 +242,9 @@ class EM(object):
                 B[n][e] = B[n][e] / B_sum[n]
         for m in range(self.N):
             pi[m] = pi[m] / pi_sum
+        #for i in range(self.N):
+        #    print "first B"
+        #    print sum(B[i])
         is_converged = False
         counter = 0
         while (is_converged != True):
@@ -245,20 +253,20 @@ class EM(object):
             self.y = Y
             self.T = len(self.y)
             alpha_list = self.forward(A, B, pi)
-            print "done alpha"
+            #print "done alpha"
             beta_list = self.backward(A, B, pi)
-            print "done beta"
+            #print "done beta"
             gamma = self.get_gamma(alpha_list, beta_list)
-            print "done gamma"
+            #print "done gamma"
             delta = self.get_delta(A, B, alpha_list, beta_list)
-            print "done delta"
+            #print "done delta"
             Anew = self.update_A(gamma, delta)
-            print "a new"
+            #print "a new"
             #print Anew
             Bnew = self.update_B(gamma)
-            print "b new"
+            #print "b new"
             pinew = self.update_pi(gamma)
-            print "pi new"
+            #print "pi new"
             counter += 1
             if counter == 1:
                 Adiff = Anew - A
@@ -282,6 +290,11 @@ class EM(object):
             B = Bnew
             pi = pinew
 
+def stopping(log_diff, num):
+    if num > 25:
+        return True
+    else:
+        return False
 
 if __name__ == '__main__':
     em = EM()
@@ -289,14 +302,50 @@ if __name__ == '__main__':
     em.N = 20 # This can be set to whatever we want it to be
     em.K = k 
     em.obs = obs
-    hmm = em.train(sonnets)
-    #states = range(5)
-    #observations = list(obs)
-    #hmm_trainer = nltk.tag.hmm.HiddenMarkovModelTrainer(states=states, symbol=observations)
-    #hmm = hmm_trainer.train_unsupervised(training)
-    #print hmm
-        
-
+    #hmm = em.train(sonnets)
+    state_num = 20
+    states = range(state_num)
+    observations = list(obs)
+    hmm_trainer = nltk.tag.hmm.HiddenMarkovModelTrainer(states, observations)
+    hmm = hmm_trainer.train_unsupervised(training)
+    print hmm._outputs[1]._samples # print this just to see what the words are
+    outputs = np.zeros((state_num, k))
+    for i in range(state_num):
+        line = hmm._outputs[i]._data
+        for l in range(len(line)):
+            #print -1.0 * line[l]
+            line[l] = math.exp(line[l])
+        outputs[i] = line
+    print outputs
+    transitions = np.zeros((state_num, state_num))
+    for s in range(state_num):
+        line = hmm._transitions[s]._data
+        for l in range(len(line)):
+            line[l] = math.exp(line[l])
+        transitions[s] = line
+    # The probabilities are all hugely negative. Not sure what kind of distribution that is
+    # or if we should normalize it somehow.
+    print transitions
+    print "max output"
+    print np.amax(outputs)
+    coords_list = []
+    # this finds the coordinates of the five most negative elements in outputs
+    for j in range(state_num):
+        for m in range(5):
+            max = np.amax(outputs[j])
+            #max = np.amin(outputs[j])
+            coords = np.argwhere(outputs[j] == max)
+            x = coords[0][0]
+            coords_list.append((j, x))
+            #outputs[j][x] = -1 * sys.maxint
+            outputs[j][x] = 0.0
+    fifth_smallest_element = max
+    # coords_list is a list of fifth smallest elements in outputs
+    print coords_list        
+    # use coords_list to find the emissions associated with these transitions
+    for c in coords_list:
+        token = hmm._outputs[c[0]]._samples[c[1]]
+        print nltk.pos_tag([token]), c[0], outputs[c[0]][c[1]]
 
 
 
