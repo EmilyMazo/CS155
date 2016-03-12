@@ -15,7 +15,7 @@ def tokenizeSequences(filename):
     training_temp = []
     sonnets = open(filename, "r")
     sonnet_list = []
-    sonnet_list_temp = []
+    #sonnet_list_temp = []
     observations = {}
     counter = 0
     for line in sonnets:
@@ -23,12 +23,15 @@ def tokenizeSequences(filename):
         line = line.split(' ')
         if len(line) == 1:
             if line == ['']:
-                continue
+                if counter == 0:
+                    continue
+                else:
+                    break
             counter += 1
-            sonnet_list.append(sonnet_list_temp)
+            #sonnet_list.append(sonnet_list_temp)
             training.append(training_temp)
             training_temp = []
-            sonnet_list_temp = []
+            #sonnet_list_temp = []
             continue
         #line.append("</s>")
         new_line = []
@@ -36,11 +39,12 @@ def tokenizeSequences(filename):
         for l in line:
             if l not in observations:
                 observations[l] = 1
-            sonnet_list_temp.append(l)
+            #sonnet_list_temp.append(l)
+            sonnet_list.append(l)
             training_temp.append((l, ''))
     training.append(training_temp)
     training.remove([])
-    sonnet_list.remove([])
+    #sonnet_list.remove([])
     sonnets.close()
     return training, sonnet_list, observations.keys(), len(observations.keys())
  
@@ -143,8 +147,8 @@ class EM(object):
             for i in range(self.N):
                 for j in range(self.N):
                     Bindex = self.obs.index(self.y[t + 1])
-                    delta_sum[t] += alpha_list[i][t] * B[j][Bindex] * A[i][j] * beta_list[j][t + 1]                    
                     num = alpha_list[i][t] * A[i][j] * beta_list[j][t + 1] * B[j][Bindex]
+                    delta_sum[t] += num                    
                     delta[i][j][t] = num 
         for i in range(self.N):
             for j in range(self.N):
@@ -165,15 +169,17 @@ class EM(object):
         '''
         A = np.zeros((self.N, self.N))
         for i in range(self.N):
+            sumDenom = 0.0
+            for e in range(self.T-1):
+                sumDenom += gamma[i][e]
             for j in range(self.N):
                 sumNum = 0.0
-                sumDenom = 0.0
                 for t in range(self.T - 1):
                     sumNum += delta[i][j][t]
-                    sumDenom += gamma[i][t]
                 A[i][j] = sumNum / sumDenom
-        print abs(sum([A[0][x] for x in range(self.N)]))
-        assert abs(sum([A[0][x] for x in range(self.N)]) - 1) < 0.001
+        #print delta
+        print abs(sum(A[0]))
+        #assert abs(sum([A[0][x] for x in range(self.N)]) - 1) < 0.001
         return A
 
     def update_B(self, gamma):
@@ -190,7 +196,7 @@ class EM(object):
                         sumNum += gamma[i][t]
                     sumDenom += gamma[i][t]
                 B[i][k] =  1e-50 + (sumNum / sumDenom)
-        print B
+        print abs(sum(B[0]))
         return B
 
     def update_pi(self, gamma): 
@@ -235,7 +241,8 @@ class EM(object):
         counter = 0
         while (is_converged != True):
             print ("new iteration")
-            self.y = random.choice(Y)
+            #self.y = random.choice(Y)
+            self.y = Y
             self.T = len(self.y)
             alpha_list = self.forward(A, B, pi)
             print "done alpha"
@@ -247,7 +254,7 @@ class EM(object):
             print "done delta"
             Anew = self.update_A(gamma, delta)
             print "a new"
-            print Anew
+            #print Anew
             Bnew = self.update_B(gamma)
             print "b new"
             pinew = self.update_pi(gamma)
