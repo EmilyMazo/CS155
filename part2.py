@@ -52,7 +52,6 @@ def tokenizeSequences(filename):
             training_temp.append((l, ''))
         #sonnet_list.append("</sonnet>")
     training_temp.append(("endofsonnet", ''))
-    training_temp = reversed(training_temp)
     training.append(training_temp)
     training.remove([])
     #sonnet_list.remove([])
