@@ -328,7 +328,7 @@ if __name__ == '__main__':
     observations = list(obs)
     w = open("AO.txt", "w")
     hmm_trainer = nltk.tag.hmm.HiddenMarkovModelTrainer(states, observations)
-    hmm = hmm_trainer.train_unsupervised(training, max_iterations=200)
+    hmm = hmm_trainer.train_unsupervised(training, max_iterations=100)
     print hmm._outputs[1]._samples # print this just to see what the words are
     outputs = np.zeros((state_num, k))
     w.write("O")
