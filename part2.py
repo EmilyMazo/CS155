@@ -7,10 +7,8 @@ import random
 import math
 import sys
 
-# The following code reads each sonnet from a text file.
-# Each sonnet is input as a single element into sonnet_list.
-# Each line of each sonnet is prepended with <s> and appended with </s>.
-# There is currently no other preprocessing.
+# This version adds start-of-line, end-of-line, start-of-sonnet, and end-of-sonnet tags
+import re
 
 def tokenizeSequences(filename):
     training = []
@@ -22,33 +20,55 @@ def tokenizeSequences(filename):
     counter = 0
     for line in sonnets:
         line = line.strip()
-        line = line.split(' ')
+        line = line.strip("(")
+        line = line.strip(")")
+        line = re.split('\s|[?.,!:;]', line)
         if len(line) == 1:
             if line == ['']:
-                if counter <= 50:
+                if counter <= 150:
                     continue
                 else:
                     break
             counter += 1
+            #sonnet_list.append("<sonnet>")
             #sonnet_list.append(sonnet_list_temp)
             training.append(training_temp)
-            training_temp = []
+            training_temp = [('startofsonnet', '')]
             #sonnet_list_temp = []
             continue
-        #line.append("</s>")
+        line.append("endofline")
         new_line = []
-        #new_line.append("<s>")
+        new_line.append("startofline")
         for l in line:
+            new_line.append(l)
+        for l in new_line:
+            l = l.lower()
+            if l == '':
+                continue
             if l not in observations:
                 observations[l] = 1
             #sonnet_list_temp.append(l)
             sonnet_list.append(l)
             training_temp.append((l, ''))
+        #sonnet_list.append("</sonnet>")
+    training_temp.append(("endofsonnet", ''))
+    training_temp = reversed(training_temp)
     training.append(training_temp)
     training.remove([])
     #sonnet_list.remove([])
     sonnets.close()
-    return training, sonnet_list, observations.keys(), len(observations.keys())
+    observations['startofsonnet'] = 1
+    observations['startofline'] = 1
+    observations['endofsonnet'] = 1
+    observations['endofline'] = 1
+    observations['.'] = 1
+    observations[','] = 1
+    observations['?'] = 1
+    observations['!'] = 1
+    observations[':'] = 1
+    observations[';'] = 1
+    print training
+    return training, sonnet_list, observations.keys(), len(observations.keys())    
  
 
 class EM(object):
@@ -301,28 +321,38 @@ if __name__ == '__main__':
     training, sonnets, obs, k = tokenizeSequences("shakespeare.txt")
     em.N = 20 # This can be set to whatever we want it to be
     em.K = k 
+    print k
     em.obs = obs
     #hmm = em.train(sonnets)
-    state_num = 20
+    state_num = 27
     states = range(state_num)
     observations = list(obs)
+    w = open("AO.txt", "w")
     hmm_trainer = nltk.tag.hmm.HiddenMarkovModelTrainer(states, observations)
-    hmm = hmm_trainer.train_unsupervised(training)
+    hmm = hmm_trainer.train_unsupervised(training, max_iterations=200)
     print hmm._outputs[1]._samples # print this just to see what the words are
     outputs = np.zeros((state_num, k))
+    w.write("O")
+    w.write("\n")
     for i in range(state_num):
         line = hmm._outputs[i]._data
         for l in range(len(line)):
             #print -1.0 * line[l]
             line[l] = math.exp(line[l])
         outputs[i] = line
+        w.write(str(line))
+        w.write("\n")
     print outputs
+    w.write("A \n")
+    w.write("\n")
     transitions = np.zeros((state_num, state_num))
     for s in range(state_num):
         line = hmm._transitions[s]._data
         for l in range(len(line)):
             line[l] = math.exp(line[l])
         transitions[s] = line
+        w.write(str(line))
+        w.write("\n")
     # The probabilities are all hugely negative. Not sure what kind of distribution that is
     # or if we should normalize it somehow.
     print transitions
@@ -331,7 +361,7 @@ if __name__ == '__main__':
     coords_list = []
     # this finds the coordinates of the five most negative elements in outputs
     for j in range(state_num):
-        for m in range(5):
+        for m in range(10):
             max = np.amax(outputs[j])
             #max = np.amin(outputs[j])
             coords = np.argwhere(outputs[j] == max)
@@ -345,7 +375,9 @@ if __name__ == '__main__':
     # use coords_list to find the emissions associated with these transitions
     for c in coords_list:
         token = hmm._outputs[c[0]]._samples[c[1]]
-        print nltk.pos_tag([token]), c[0], outputs[c[0]][c[1]]
+        #print nltk.pos_tag([token]), c[0], outputs[c[0]][c[1]]
+        print token, c[0]
+    w.close()
 
 
 

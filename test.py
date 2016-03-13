@@ -1,10 +1,206 @@
-import nltk
-import random
-s = """"Your humble writer knows a little bit about a lot of things, but despite writing a fair amount about text processing (a book, for example), linguistic processing is a relatively novel area for me. Forgive me if I stumble through my explanations of the quite remarkable Natural Language Toolkit (NLTK), a wonderful tool for teaching, and working in, computational linguistics using Python. Computational linguistics, moreover, is closely related to the fields of artificial intelligence, language/speech recognition, translation, and grammar checking.\nWhat NLTK includes\nIt is natural to think of NLTK as a stacked series of layers that build on each other. Readers familiar with lexing and parsing of artificial languages (like, say, Python) will not have too much of a leap to understand the similar -- but deeper -- layers involved in natural language modeling.\nGlossary of terms\nCorpora: Collections of related texts. For example, the works of Shakespeare might, collectively, by called a corpus; the works of several authors, corpora.\nHistogram: The statistic distribution of the frequency of different words, letters, or other items within a data set.\nSyntagmatic: The study of syntagma; namely, the statistical relations in the contiguous occurrence of letters, words, or phrases in corpora.\nContext-free grammar: Type-2 in Noam Chomsky's hierarchy of the four types of formal grammars. See Resources for a thorough description.\nWhile NLTK comes with a number of corpora that have been pre-processed (often manually) to various degrees, conceptually each layer relies on the processing in the adjacent lower layer. Tokenization comes first; then words are tagged; then groups of words are parsed into grammatical elements, like noun phrases or sentences (according to one of several techniques, each with advantages and drawbacks); and finally sentences or other grammatical units can be classified. Along the way, NLTK gives you the ability to generate statistics about occurrences of various elements, and draw graphs that represent either the processing itself, or statistical aggregates in results.\nIn this article, you'll see some relatively fleshed-out examples from the lower-level capabilities, but most of the higher-level capabilities will be simply described abstractly. Let's now take the first steps past text processing, narrowly construed. """
-sentences = s.split('.')[:-1]
-seq = [map(lambda x:(x,''), ss.split(' ')) for ss in sentences]
-symbols = list(set([ss[0] for sss in seq for ss in sss]))
-states = range(5)
-trainer = nltk.tag.hmm.HiddenMarkovModelTrainer(states=states,symbols=symbols)
-m = trainer.train_unsupervised(seq)
-print m.best_path()
+# The following code reads each sonnet from a text file.
+# Each sonnet is input as a single element into sonnet_list.
+# Each line of each sonnet is prepended with <s> and appended with </s>.
+# There is currently no other preprocessing.
+
+def tokenizeSequences(filename):
+    training = []
+    training_temp = []
+    sonnets = open(filename, "r")
+    sonnet_list = []
+    #sonnet_list_temp = []
+    observations = {}
+    counter = 0
+    for line in sonnets:
+        line = line.strip()
+        line = line.split(' ')
+        if len(line) == 1:
+            if line == ['']:
+                if counter <= 0:
+                    continue
+                else:
+                    break
+            counter += 1
+            #sonnet_list.append("<sonnet>")
+            #sonnet_list.append(sonnet_list_temp)
+            training.append(training_temp)
+            #sonnet_list_temp = []
+            continue
+        new_line = []
+        for l in line:
+            new_line.append(l)
+        for l in new_line:
+            if l not in observations:
+                observations[l] = 1
+            #sonnet_list_temp.append(l)
+            sonnet_list.append(l)
+            training_temp.append((l, ''))
+        #sonnet_list.append("</sonnet>")
+    training.append(training_temp)
+    #sonnet_list.remove([])
+    sonnets.close()
+    print training
+    return training, sonnet_list, observations.keys(), len(observations.keys())
+
+# This version adds start-of-line, end-of-line, start-of-sonnet, and end-of-sonnet tags
+def tokenizeSequences(filename):
+    training = []
+    training_temp = []
+    sonnets = open(filename, "r")
+    sonnet_list = []
+    #sonnet_list_temp = []
+    observations = {}
+    counter = 0
+    for line in sonnets:
+        line = line.strip()
+        line = line.split(' ')
+        if len(line) == 1:
+            if line == ['']:
+                if counter <= 2:
+                    continue
+                else:
+                    break
+            counter += 1
+            #sonnet_list.append("<sonnet>")
+            #sonnet_list.append(sonnet_list_temp)
+            training.append(training_temp)
+            training_temp = [('startofsonnet', '')]
+            #sonnet_list_temp = []
+            continue
+        line.append("endofline")
+        new_line = []
+        new_line.append("startofline")
+        for l in line:
+            new_line.append(l)
+        for l in new_line:
+            if l not in observations:
+                observations[l] = 1
+            #sonnet_list_temp.append(l)
+            sonnet_list.append(l)
+            training_temp.append((l, ''))
+        #sonnet_list.append("</sonnet>")
+    training_temp.append(("endofsonnet", ''))
+    training.append(training_temp)
+    training.remove([])
+    #sonnet_list.remove([])
+    sonnets.close()
+    observations['startofsonnet'] = 1
+    observations['startofline'] = 1
+    observations['endofsonnet'] = 1
+    observations['endofline'] = 1
+    print training
+    return training, sonnet_list, observations.keys(), len(observations.keys())    
+    
+# This version adds start-of-line, end-of-line, start-of-sonnet, and end-of-sonnet tags
+# and also removes punctuation
+def tokenizeSequences(filename):
+    training = []
+    training_temp = []
+    sonnets = open(filename, "r")
+    sonnet_list = []
+    #sonnet_list_temp = []
+    observations = {}
+    counter = 0
+    for line in sonnets:
+        line = line.strip()
+        line = line.split(' ')
+        line =  [word.strip(".,?;:()").lower() for word in line]
+        if len(line) == 1:
+            if line == ['']:
+                if counter <= 2:
+                    continue
+                else:
+                    break
+            counter += 1
+            #sonnet_list.append("<sonnet>")
+            #sonnet_list.append(sonnet_list_temp)
+            training.append(training_temp)
+            training_temp = [('startofsonnet', '')]
+            #sonnet_list_temp = []
+            continue
+        line.append("endofline")
+        new_line = []
+        new_line.append("startofline")
+        for l in line:
+            new_line.append(l)
+        for l in new_line:
+            if l not in observations:
+                observations[l] = 1
+            #sonnet_list_temp.append(l)
+            sonnet_list.append(l)
+            training_temp.append((l, ''))
+        #sonnet_list.append("</sonnet>")
+    training_temp.append(("endofsonnet", ''))
+    training.append(training_temp)
+    training.remove([])
+    #sonnet_list.remove([])
+    sonnets.close()
+    observations['startofsonnet'] = 1
+    observations['startofline'] = 1
+    observations['endofsonnet'] = 1
+    observations['endofline'] = 1
+    print training
+    return training, sonnet_list, observations.keys(), len(observations.keys())    
+
+ # This version adds start-of-line, end-of-line, start-of-sonnet, and end-of-sonnet tags
+# and also makes punctuation into new tokens
+import re
+
+def tokenizeSequences(filename):
+    training = []
+    training_temp = []
+    sonnets = open(filename, "r")
+    sonnet_list = []
+    #sonnet_list_temp = []
+    observations = {}
+    counter = 0
+    for line in sonnets:
+        line = line.strip()
+        line = line.strip("(")
+        line = line.strip(")")
+        line = re.split('\s|[?.,!:;]', line)
+        if len(line) == 1:
+            if line == ['']:
+                if counter <= 0:
+                    continue
+                else:
+                    break
+            counter += 1
+            #sonnet_list.append("<sonnet>")
+            #sonnet_list.append(sonnet_list_temp)
+            training.append(training_temp)
+            training_temp = [('startofsonnet', '')]
+            #sonnet_list_temp = []
+            continue
+        line.append("endofline")
+        new_line = []
+        new_line.append("startofline")
+        for l in line:
+            new_line.append(l)
+        for l in new_line:
+            if l not in observations:
+                observations[l] = 1
+            #sonnet_list_temp.append(l)
+            sonnet_list.append(l)
+            if l == "''":
+                continue
+            training_temp.append((l, ''))
+        #sonnet_list.append("</sonnet>")
+    training_temp.append(("endofsonnet", ''))
+    training.append(training_temp)
+    training.remove([])
+    #sonnet_list.remove([])
+    sonnets.close()
+    observations['startofsonnet'] = 1
+    observations['startofline'] = 1
+    observations['endofsonnet'] = 1
+    observations['endofline'] = 1
+    observations['.'] = 1
+    observations[','] = 1
+    observations['?'] = 1
+    observations['!'] = 1
+    observations[':'] = 1
+    observations[';'] = 1
+    print training
+    return training, sonnet_list, observations.keys(), len(observations.keys())    
+
