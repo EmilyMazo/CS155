@@ -25,7 +25,7 @@ def tokenizeSequences(filename):
         line = re.split('\s|[?.,!:;]', line)
         if len(line) == 1:
             if line == ['']:
-                if counter <= 292:
+                if counter <= 1:
                     continue
                 else:
                     break
@@ -372,11 +372,16 @@ if __name__ == '__main__':
     # coords_list is a list of fifth smallest elements in outputs
     print coords_list        
     # use coords_list to find the emissions associated with these transitions
+    learn = open("learnedStates.txt", "w")
     for c in coords_list:
         token = hmm._outputs[c[0]]._samples[c[1]]
         #print nltk.pos_tag([token]), c[0], outputs[c[0]][c[1]]
-        print token, c[0]
+        learn.write(str(c[0]))
+        learn.write("\n")
+        learn.write(str(token))
+        learn.write("\n")
     w.close()
+    learn.close()
 
 
 
