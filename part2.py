@@ -25,7 +25,7 @@ def tokenizeSequences(filename):
         line = re.split('\s|[?.,!:;]', line)
         if len(line) == 1:
             if line == ['']:
-                if counter <= 150:
+                if counter <= 292:
                     continue
                 else:
                     break
@@ -317,7 +317,7 @@ def stopping(log_diff, num):
 
 if __name__ == '__main__':
     em = EM()
-    training, sonnets, obs, k = tokenizeSequences("shakespeare.txt")
+    training, sonnets, obs, k = tokenizeSequences("willy shakes and spenser.txt")
     em.N = 20 # This can be set to whatever we want it to be
     em.K = k 
     print k
